@@ -1,7 +1,7 @@
 """
 This will help to keep track of the strong and weak moves for players
 """
-__version__ = "0.4.0"
+__version__ = "0.4.6"
 
 import os
 import random
@@ -23,6 +23,7 @@ from kivy.uix.slider import Slider
 from kivy.uix.image import Image
 from kivy.uix.modalview import ModalView
 from kivymd.uix.stacklayout import MDStackLayout
+from kivymd.uix.boxlayout import MDBoxLayout
 
 # import kivy
 from kivymd.app import MDApp
@@ -46,7 +47,7 @@ counter = {}
 """
 exemple = {
     'Player': [
-    {'set':[{'won': None, 'moves': [[move, state]]}], 'date' = today},
+    {'set':[{'won': None, 'moves': [[move, state]]}], 'date' = '23-02-01'},
     ]
 }
 """
@@ -54,45 +55,52 @@ exemple = {
 # Variable
 slider_threshold = 20
 
+PRAZO_MAXIMO = datetime.date(2023,3,10)
+
+MOVES = [
+    'Clear',
+    'Drive',
+    'Smash',
+    'Serve',
+    'Defense',
+    'Drop',
+    'Net Play',
+    'kill',
+]
+
 
 ### Helpers
 
-def add_move(move, player_input, state, *args):
-    player_name = player_input.text.title().strip()
-    add_player(player_input=player_input)
+def add_move(move, player_name, state, *args):
+    add_player(player_name=player_name)
     counter[player_name][-1]['set'][-1]['moves'].append([move, state])
+    save_file(player_name)
 
-
-def add_player(player_input):
-    player_name = player_input.text.title().strip()
+def add_player(player_name):
     if player_name not in counter:
         counter[player_name] = []
-        add_set(player_input)
+        add_set(player_name)
 
-
-def add_set(player_input):
-    player_name = player_input.text.title().strip()
+def add_set(player_name):
     new_set = {'set': [], 'date': datetime.date.today().isoformat()}
+    if player_name not in counter:
+        add_player(player_name)
+        return
     counter[player_name].append(new_set)
-    add_point(player_input)
+    add_point(player_name)
 
-
-def add_point(player_input, *args):
-    player_name = player_input.text.title().strip()
+def add_point(player_name, *args):
     counter[player_name][-1]['set'].append({'won': None, 'moves': []})
 
-
-def set_point_won(player_input, won=True, *args):
-    player_name = player_input.text.title().strip()
+def set_point_won(player_name, won=True, *args):
     counter[player_name][-1]['set'][-1]['won'] = won
-    add_point(player_input)
-
+    add_point(player_name)
 
 def unset_point(player_input, *args):
     player_name = player_input.text.title().strip()
-    counter[player_name][-1].pop()
-    counter[player_name][-1][-1][0] = None
-
+    counter[player_name][-1]['set'].pop()
+    if len(counter[player_name][-1]['set'])>0:
+        counter[player_name][-1]['set'][-1]['won'] = None
 
 def load_file():
     global counter
@@ -100,7 +108,6 @@ def load_file():
     if os.path.exists(file_name):
         with open(file_name, 'r') as file:
             counter = json.load(file)
-
 
 def save_file(last_player_name):
     # Save the dict with the moves
@@ -115,13 +122,14 @@ def save_file(last_player_name):
 # Helper Classes
 class Marker(MDGridLayout):
     def __init__(self, move, window, *args, **kwargs):
-        super().__init__(cols=1, size_hint=[.1, 1], pos_hint={'center': [.5, .5]}, md_bg_color=[.7, .7, .7, 1], *args,
+        super().__init__(cols=1, size_hint=[.1, 1], pos_hint={'center': [.5, .5]}, md_bg_color=[.9,.9,.9,1], *args,
                          **kwargs)
         self.window = window
         self.move = move
-        # self.slider = Slider(min=-50, max=50, value=0, orientation='vertical', background_width=30, size_hint_y=.8, sensitivity='handle', value_track=True, value_track_color=[0,0,0,1])
+
         self.slider = MDSlider(min=-50, max=50, value=0, orientation='vertical', background_width=30, size_hint_y=.8,
-                               show_off=False)
+                               show_off=False, hint=False)
+
         self.slider.on_touch_up = self.add_move
         self.label = MDLabel(text=move, halign='center', size_hint_y=.2)
         self.slider.bind(value=self.change_hint)
@@ -152,8 +160,9 @@ class Marker(MDGridLayout):
             state = 'bad'  # bad
 
         # add the move
-        add_move(move=self.move, player_input=self.window.player_name, state=state)
+        add_move(move=self.move, player_name=self.window.player_name.text.title().strip(), state=state)
 
+        # add the history
         self.window.add_history(self.move, state)
 
 
@@ -196,15 +205,44 @@ class PlayersSelection(ModalView):
 
 class BarForGraphic(MDRelativeLayout):
     def __init__(self, val, max_val, move, bar_color=[0, .6, .7, 1], *args, **kwargs):
-        super().__init__(md_bg_color=[1, 1, 1, 1], *args, **kwargs)
+        w = max(Window.size)
+        width = w * .23
+        super().__init__(md_bg_color=[1, 1, 1, 1], size_hint_x=None, width=width, *args, **kwargs)
         self.val = val
         self.max_val = max_val
         size_hint_y = (val / max_val) * .8
         self.move = move
-        self.bar = MDGridLayout(cols=1, md_bg_color=bar_color, size_hint=[1, size_hint_y])
+        self.bar = MDGridLayout(cols=1, md_bg_color=bar_color, size_hint=[.8, size_hint_y], pos_hint={'center_x': .5})
         self.add_widget(self.bar)
         self.add_widget(
             MDLabel(text=self.move, pos_hint={'y': size_hint_y, 'center_x': .5}, halign='center', adaptive_size=True))
+
+
+class FullBar(MDBoxLayout):
+    def __init__(self, elements, name, *args, **kwargs):
+        moves_to_show=3
+        w = max(Window.size)
+        width = w * .23
+        super().__init__(orientation='vertical', md_bg_color=[.98, .98, .98, 1], size_hint_x=None, width=width, *args, **kwargs)
+        self.elements = elements
+        self.add_widget(MDLabel(text=name, size_hint=[1,.1], halign='center'))
+        colors = ['red', [0.5, .5, 1, 1], [0, 1, 0, 1], [1, 1, 0, 1], [0, 0, 0, 1], [.5, .7, .5, 1]]
+
+        moves = elements.most_common(moves_to_show)[::-1]
+        if elements.total() > sum(x[-1] for x in moves):
+            moves.insert(0, ['outros', elements.total() - sum(x[-1] for x in moves)])
+
+        moves_grid=MDGridLayout(cols=1, size_hint=[1, .9], padding=[10,10,10,0])
+        for color, [move, qnt] in zip(colors, moves):
+            bar = MDGridLayout(size_hint=[1, qnt], md_bg_color=color, cols=1)
+            bar.add_widget(MDLabel(text=move, size_hint=[1,1], pos_hint={'center':[.5,.5]}))
+            moves_grid.add_widget(bar)
+        self.add_widget(moves_grid)
+
+
+class NameTextField(MDTextField):
+    def insert_text(self, substring, from_undo=False):
+        super().insert_text(substring.title(), from_undo=False)
 
 
 # classes for windows
@@ -215,11 +253,14 @@ class MainWindow(MDGridLayout):
         if os.path.exists(last_player):
             with open(last_player, 'r') as file:
                 text = json.load(file)
+                add_set(text)
         self.player_name = MDTextField(size_hint=[1, .1], text=text, halign='center',
-                                       text_color_focus='blue', text_color_normal='black')
+                                       text_color_focus='blue', text_color_normal='black', required=True)#, on_text_validate=self.on_validate)
+        self.player_name.bind(text=self.on_typing)
+        self.player_name.bind(focus=self.on_validate)
         self.score = [0, 0]
         self.score_lbl = MDLabel(size_hint=[.4, 1], pos_hint={'center': [.5, .5]}, text=' 0 x 0 ', halign='center',
-                                 font_style='H3')
+                                 font_style='H6')
         self.history_lbl = MDLabel(size_hint=[.4, .05], pos_hint={'center': [.5, .5]}, text='  ', halign='center',
                                    font_style='H6')
         self.history = list()
@@ -232,7 +273,7 @@ class MainWindow(MDGridLayout):
 
         points_grid = MDGridLayout(rows=1, size_hint=[1, .1])
 
-        points_grid.add_widget(MDRectangleFlatIconButton(text='Voltar', on_release=self.back_point, size_hint=[.3, 1]))
+        points_grid.add_widget(MDRectangleFlatIconButton(text='back pt', on_release=self.back_point, size_hint=[.3, 1]))
         points_grid.add_widget(self.score_lbl)
         points_grid.add_widget(MDRectangleFlatIconButton(text='Game', on_release=self.new_set, size_hint=[.3, 1]))
 
@@ -247,25 +288,22 @@ class MainWindow(MDGridLayout):
         self.add_widget(pts_grid)
 
         # Add the moves Markers
-        markers_grid = MDGridLayout(cols=5, size_hint=[.9, .8], pos_hint={'center': [.5, .5]},
-                                    md_bg_color=[.5, .5, .5, 1],
-                                    spacing=10)
-        moves = [
-            'Clear',
-            'Drive',
-            'Smash',
-            'Serve',
-            'Defense',
-            'Drop',
-            'Net Play',
-        ]
-        for move in moves:
+        markers_grid = MDGridLayout(rows=2, size_hint=[.9, .8], pos_hint={'center': [.5, .5]},
+                                    md_bg_color=[.5,.5,.5,1], spacing=10, padding=[10] * 4)
+
+        for move in MOVES:
             markers_grid.add_widget(Marker(move, self))
         self.add_widget(markers_grid)
 
+    def on_typing(self, *args):
+        self.player_name.text = self.player_name.text.title()
+
+    def on_validate(self, *args):
+        self.player_name.text = self.player_name.text.title().strip()
+
     def set_point(self, player=True, *args):
         self.add_point(player)
-        set_point_won(self.player_name, player)
+        set_point_won(self.player_name.text.title().strip(), player)
         self.update_score()
         self.history_lbl.text = ''
         self.history.clear()
@@ -293,11 +331,12 @@ class MainWindow(MDGridLayout):
         self.all_pts.clear()
         self.history.clear()
         self.history_lbl.text = ''
+        self.update_score()
 
 
 class StatsWindow(MDGridLayout):
     def __init__(self, *args, **kwargs):
-        super().__init__(cols=1, padding=[10,10,10,10], spacing=5, *args, **kwargs)
+        super().__init__(cols=1, padding=[10, 10, 10, 10], spacing=5, *args, **kwargs)
         self.popup = PlayersSelection(size_hint=[.8, .9])
         text = 'Player'
         if os.path.exists(last_player):
@@ -316,21 +355,35 @@ class StatsWindow(MDGridLayout):
         self.add_widget(self.build_moves())
 
         # statistics grid
-        statistics_grid_btns = MDGridLayout(cols=4, size_hint=[1, .2], spacing=20)
+        common_grid_stts = MDStackLayout(orientation='lr-tb', spacing=20, padding=[20] * 4, md_bg_color=[.5,.5,.5,1],
+                                             adaptive_height=True)
+        stt_scroll = MDScrollView(size_hint=[1, .3], bar_color='red')
+        stt_scroll.add_widget(common_grid_stts)
+        self.add_widget(stt_scroll)
+
+
+
 
         # statistic btns
-        statistics_grid_btns.add_widget(MDFillRoundFlatButton(text='Pontos Finais', on_release=self.show_last_move_pts))
-        statistics_grid_btns.add_widget(MDFillRoundFlatButton(text='Pontos para final', on_release=self.moves_qnt_per_point))
-        statistics_grid_btns.add_widget(MDFillRoundFlatButton(text='golpes mais usados', on_release=self.moves_used_per_point))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Last moves', on_release=self.show_last_move_pts))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Qnt moves to pt', on_release=self.moves_qnt_per_point))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Common Moves', on_release=self.moves_used_per_point))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Moves by day', on_release=self.moves_per_day))
 
+        # specific for moves
+        statistics_grid_btns = MDStackLayout(orientation='lr-tb', spacing=20, padding=[20] * 4,
+                                             md_bg_color=[.5, .5, .5, 1],
+                                             adaptive_height=True)
+        moves_scroll = MDScrollView(size_hint=[1, .3], bar_color='black')
+        moves_scroll.add_widget(statistics_grid_btns)
 
-        self.add_widget(statistics_grid_btns)
-
-
+        for move in MOVES:
+            statistics_grid_btns.add_widget(MDFillRoundFlatButton(text=f'{move}s', on_release=partial(self.especific_move_proeficience_per_day, move)))
+        self.add_widget(moves_scroll)
 
     def build_moves(self):
-        scroll = MDScrollView(1,.8)
-        grid = MDGridLayout(adaptive_height=True, spacing=20, cols=1, md_bg_color=[0, 0, 0, 1],
+        scroll = MDScrollView(size_hint=[.9, .5])
+        grid = MDGridLayout(adaptive_height=True, spacing=20, cols=1, md_bg_color=[.5,.5,.5,1],
                             padding=[20, 20, 20, 20])
 
         this_player_dict = self.get_player_dict()
@@ -357,8 +410,8 @@ class StatsWindow(MDGridLayout):
             this_player_dict = {}
             return this_player_dict
         else:
-            for set in this_player_dict:
-                for pt in set['set']:
+            for game in this_player_dict:
+                for pt in game['set']:
                     moves = pt.get('moves')
                     if moves:
                         for move, state in moves:
@@ -375,8 +428,8 @@ class StatsWindow(MDGridLayout):
             this_player_dict = {}
             return this_player_dict
         else:
-            for set in this_player_dict:
-                for won, moves in set:
+            for game in this_player_dict:
+                for won, moves in game:
                     for move, state in moves:
                         if move not in new_dict[won]:
                             new_dict[won][move] = {'good': 0, 'bad': 0}
@@ -391,8 +444,8 @@ class StatsWindow(MDGridLayout):
             this_player_dict = {}
             return this_player_dict
         else:
-            for set in this_player_dict:
-                for pt in set['set']:
+            for game in this_player_dict:
+                for pt in game['set']:
                     won = pt.get('won')
                     moves = pt.get('moves')
                     if won is not None and moves:
@@ -404,8 +457,16 @@ class StatsWindow(MDGridLayout):
 
     def show_last_move_pts(self, *args):
         main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
-        victories = MDGridLayout(rows=1, spacing=20)
-        loses_grid = MDGridLayout(rows=1, spacing=20)
+        victories = MDGridLayout(rows=1, spacing=20, adaptive_width=True)
+        loses_grid = MDGridLayout(rows=1, spacing=20, adaptive_width=True)
+
+        # scrolls
+        scroll_vic = MDScrollView(size_hint=[1, 1])
+        scroll_vic.add_widget(victories)
+
+        scrol_los = MDScrollView(size_hint=[1, 1])
+        scrol_los.add_widget(loses_grid)
+
         last_moves = self.get_player_last_moves()
         wons = last_moves.get(True, {})
         loses = last_moves.get(False, {})
@@ -430,28 +491,21 @@ class StatsWindow(MDGridLayout):
             height_l.append(qnt)
 
         # for graphs
-        if height_l and height_w:
-            max_y = max(height_l + height_w)
-        elif height_w:
-            max_y = max(height_w)
-        elif height_l:
-            max_y = max(height_l)
-
         for move, val in zip(x_w, height_w):
-            victories.add_widget(BarForGraphic(max_val=max_y, move=move, val=val))
+            victories.add_widget(BarForGraphic(max_val=max(height_w), move=move, val=val))
 
         for move, val in zip(x_l, height_l):
-            loses_grid.add_widget(BarForGraphic(max_val=max_y, move=move, val=val))
+            loses_grid.add_widget(BarForGraphic(max_val=max(height_l), move=move, val=val))
 
         vic_grid = MDGridLayout(cols=1)
         vic_grid.add_widget(
-            MDLabel(text='Pts Feitos', font_style='H6', theme_text_color='Custom', text_color='white', halign='center'))
-        vic_grid.add_widget(victories)
+            MDLabel(text='Pts won', font_style='H6', theme_text_color='Custom', text_color='white', halign='center'))
+        vic_grid.add_widget(scroll_vic)
 
         los_grid = MDGridLayout(cols=1)
         los_grid.add_widget(
-            MDLabel(text='Perdidos', font_style='H6', theme_text_color='Custom', text_color='white', halign='center'))
-        los_grid.add_widget(loses_grid)
+            MDLabel(text='Pts lost', font_style='H6', theme_text_color='Custom', text_color='white', halign='center'))
+        los_grid.add_widget(scrol_los)
 
         main_grid.add_widget(vic_grid)
         main_grid.add_widget(los_grid)
@@ -459,6 +513,7 @@ class StatsWindow(MDGridLayout):
         popup = Popup(title=f'Pontuação', content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
         popup.open()
+        # self.moves_per_day()
 
     def moves_qnt_per_point(self, *args):
         name = self.player_name_btn.text
@@ -469,17 +524,24 @@ class StatsWindow(MDGridLayout):
             this_player_dict = {}
             return this_player_dict
         else:
-            for set in this_player_dict:
-                for pt in set['set']:
+            for game in this_player_dict:
+                for pt in game['set']:
                     if pt['won'] is True:
                         moves_to_win.append(len(pt['moves']))
                     if pt['won'] is False:
                         moves_to_lose.append(len(pt['moves']))
 
-        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10, md_bg_color=[1,1,1,1])
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10, md_bg_color=[1, 1, 1, 1])
 
-        main_grid.add_widget(MDLabel(text=f'Média de Pontos para ponto feito: {stt.mean(moves_to_win)}'))
-        main_grid.add_widget(MDLabel(text=f'Média de Pontos para ponto perdido: {stt.mean(moves_to_lose)}'))
+        if moves_to_win:
+            main_grid.add_widget(MDLabel(text=f'Mean qnt of moves to get pt: {stt.mean(moves_to_win)}'))
+        else:
+            main_grid.add_widget(MDLabel(text='No statistics.'))
+
+        if moves_to_lose:
+            main_grid.add_widget(MDLabel(text=f'Mean qnt of moves to lose pt: {stt.mean(moves_to_lose)}'))
+        else:
+            main_grid.add_widget(MDLabel(text='No statistics.'))
 
 
         popup = Popup(title=f'Pontuação', content=main_grid, size_hint=[1, .8], title_align='center',
@@ -489,49 +551,121 @@ class StatsWindow(MDGridLayout):
     def moves_used_per_point(self, *args):
         name = self.player_name_btn.text
         this_player_dict = counter.get(name)
-        new_dict = {True:Counter(), False:Counter()}
+        new_dict = {True: Counter(), False: Counter()}
         if this_player_dict is None:
             this_player_dict = {}
             return this_player_dict
         else:
-            for set in this_player_dict:
-                for pt in set['set']:
+            for moves_set in this_player_dict:
+                for pt in moves_set['set']:
                     won = pt['won']
                     if won is not None:
                         moves = list(el[0] for el in pt['moves'])
                         new_dict[won].update(moves)
 
-        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10, md_bg_color=[1,1,1,1])
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10, md_bg_color=[1, 1, 1, 1])
 
-        main_grid.add_widget(MDLabel(text=f'Move mais usado nos pontos ganhos: {[x[0] for x in new_dict[True].most_common(3)]}'))
-        main_grid.add_widget(MDLabel(text=f'Move mais usado nos pontos perdidos: {[x[0] for x in new_dict[False].most_common(3)]}'))
+        main_grid.add_widget(
+            MDLabel(text=f'most used moves for won pts: {[x[0] for x in new_dict[True].most_common(3)]}'))
+        main_grid.add_widget(
+            MDLabel(text=f'most used moves for lost pts: {[x[0] for x in new_dict[False].most_common(3)]}'))
 
         popup = Popup(title=f'Pontuação', content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
         popup.open()
 
-    def history_moves_qnt_per_point(self, *args):
-        name = self.player_name_btn.text
-        this_player_dict = counter.get(name)
-        moves_to_win = list()
-        moves_to_lose = list()
-        if this_player_dict is None:
-            this_player_dict = {}
-            return this_player_dict
+    def moves_per_day(self, *args):
+        player_dict = counter.get(self.player_name_btn.text)
+        new_dict = dict()
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
+        if player_dict in [None, {}]:
+            main_grid.add_widget(MDLabel(text='Sem informação para análises',theme_text_color='Custom', text_color='black'))
         else:
-            for set in this_player_dict:
-                for idx, pt in enumerate(set['set']):
-                    if pt['won'] is True:
-                        moves_to_win[idx].append(len(pt['moves']))
-                    if pt['won'] is False:
-                        moves_to_lose[idx].append(len(pt['moves']))
+            for moves_set in player_dict:
+                if moves_set['date'] not in new_dict:
+                    new_dict[moves_set['date']] = Counter()
+                # get moves
+                new_moves = list()
+                for pt in moves_set['set']:
+                    for move, grade in pt['moves']:
+                        new_moves.append(move)
+                new_dict[moves_set['date']].update(new_moves)
+            scroll = MDScrollView(size_hint=[1, 1])
+            dates_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
+            date_moves = list(new_dict.items())
+            date_moves.sort(key=lambda x: datetime.date.fromisoformat(x[0]), reverse=False)
+            for date, moves_counter in date_moves:
+                if sum(moves_counter.values()) > 0:
+                    name = datetime.date.fromisoformat(date).strftime('%d/%m/%y')
+                    dates_grid.add_widget(FullBar(moves_counter, name))
 
-        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10, md_bg_color=[1, 1, 1, 1])
+            if len(dates_grid.children) == 0:
+                dates_grid.size_hint=[1,1]
+                dates_grid.md_bg_color = [.98,.98,.98,1]
+                dates_grid.add_widget(MDLabel(text='Sem informação para análises', size_hint=[1,1], halign='center',
+                                              theme_text_color='Custom', text_color='black', pos_hint={'center':[.5,.5]}))
 
-        main_grid.add_widget(MDLabel(text=f'Média de golpes para ponto feito: {stt.mean(moves_to_win)}'))
-        main_grid.add_widget(MDLabel(text=f'Média de golpes para ponto perdido: {stt.mean(moves_to_lose)}'))
+            scroll.add_widget(dates_grid)
+            main_grid.add_widget(scroll)
 
-        popup = Popup(title=f'Pontuação', content=main_grid, size_hint=[1, .8], title_align='center',
+        popup = Popup(title=f'Golpes por dia', content=main_grid, size_hint=[1, .8], title_align='center',
+                      title_size=MDLabel(font_style="H4").font_size)
+        popup.open()
+
+    def especific_move_proeficience_per_day(self, move_name, *args):
+        player_dict = counter.get(self.player_name_btn.text)
+        new_dict = dict()
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
+        if player_dict in [None, {}]:
+            main_grid.add_widget(MDLabel(text='Sem informação para análises'))
+        else:
+            if datetime.date.fromisoformat(player_dict[0]['date'])+datetime.timedelta(days=31) > datetime.date.fromisoformat(player_dict[-1]['date']):
+                monthly = False
+            else:
+                monthly = True
+            for moves_set in player_dict:
+                this_date = moves_set['date']
+                if monthly:
+                    this_date = this_date[:7]
+                if this_date not in new_dict:
+                    new_dict[this_date] = Counter()
+
+                # get moves
+                new_moves = list()
+                for pt in moves_set['set']:
+                    for move, grade in pt['moves']:
+                        if move == move_name:
+                            new_moves.append(grade.title())
+                new_dict[this_date].update(new_moves)
+            scroll = MDScrollView(size_hint=[1, 1])
+            dates_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
+            date_moves = list(new_dict.items())
+            if monthly:
+                date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m'), reverse=False)
+            else:
+                date_moves.sort(key=lambda x: datetime.datetime.fromisoformat(x[0]), reverse=False)
+            for date, moves_counter in date_moves:
+                if sum(moves_counter.values()) > 0:
+                    if monthly:
+                        name = datetime.datetime.strptime(date, '%Y-%m').strftime('%m/%y')
+                    else:
+                        name = datetime.date.fromisoformat(date).strftime('%d/%m/%y')
+                    dates_grid.add_widget(FullBar(moves_counter, name))
+
+            if len(dates_grid.children) == 0:
+                dates_grid.size_hint = [1, 1]
+                dates_grid.md_bg_color = [.98, .98, .98, 1]
+                dates_grid.add_widget(MDLabel(text='Sem informação para análises', size_hint=[1, 1], halign='center',
+                                              theme_text_color='Custom', text_color='black',
+                                              pos_hint={'center': [.5, .5]}))
+
+            scroll.add_widget(dates_grid)
+            main_grid.add_widget(scroll)
+
+        title = f'{move_name}s by day'
+        if monthly:
+            title = f'{move_name}s by Month'
+        popup = Popup(title=title, content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
         popup.open()
 
@@ -560,5 +694,16 @@ class AssistenteApp(MDApp):
         self.stats_window.change_player(self.main_window.player_name.text)
         self.stats_window.popup.build()
 
+class EntreEmContato(MDApp):
+    def build(self):
+        txt = f'''Esse aplicativo foi desativado  por estar desatualizado. Entre em contato com Mutante Apps pelo email:
 
-AssistenteApp().run()
+mutante.apps@gmail.com'''
+        lbl = MDLabel(text=txt, font_style='H4', halign='center')
+        return lbl
+
+
+if datetime.date.today() > PRAZO_MAXIMO:
+    EntreEmContato().run()
+else:
+    AssistenteApp().run()
