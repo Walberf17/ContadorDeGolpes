@@ -1,7 +1,7 @@
 """
 This will help to keep track of the strong and weak moves for players
 """
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 
 import os
 import random
@@ -15,8 +15,7 @@ from collections import Counter
 
 from kivy.uix.screenmanager import Screen, ScreenManager
 from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.button import MDIconButton, MDFlatButton, MDRoundFlatButton, MDFillRoundFlatButton, \
-    MDRectangleFlatIconButton
+from kivymd.uix.button import MDIconButton, MDFlatButton, MDRoundFlatButton, MDFillRoundFlatButton, MDRectangleFlatIconButton
 from kivymd.uix.relativelayout import MDRelativeLayout
 from kivymd.uix.carousel import MDCarousel
 from kivy.uix.slider import Slider
@@ -55,7 +54,7 @@ exemple = {
 # Variable
 slider_threshold = 20
 
-PRAZO_MAXIMO = datetime.date(2023,3,10)
+PRAZO_MAXIMO = datetime.date(2023, 3, 10)
 
 MOVES = [
     'Clear',
@@ -76,10 +75,12 @@ def add_move(move, player_name, state, *args):
     counter[player_name][-1]['set'][-1]['moves'].append([move, state])
     save_file(player_name)
 
+
 def add_player(player_name):
     if player_name not in counter:
         counter[player_name] = []
         add_set(player_name)
+
 
 def add_set(player_name):
     new_set = {'set': [], 'date': datetime.date.today().isoformat()}
@@ -89,18 +90,22 @@ def add_set(player_name):
     counter[player_name].append(new_set)
     add_point(player_name)
 
+
 def add_point(player_name, *args):
     counter[player_name][-1]['set'].append({'won': None, 'moves': []})
+
 
 def set_point_won(player_name, won=True, *args):
     counter[player_name][-1]['set'][-1]['won'] = won
     add_point(player_name)
 
+
 def unset_point(player_input, *args):
     player_name = player_input.text.title().strip()
     counter[player_name][-1]['set'].pop()
-    if len(counter[player_name][-1]['set'])>0:
+    if len(counter[player_name][-1]['set']) > 0:
         counter[player_name][-1]['set'][-1]['won'] = None
+
 
 def load_file():
     global counter
@@ -108,6 +113,7 @@ def load_file():
     if os.path.exists(file_name):
         with open(file_name, 'r') as file:
             counter = json.load(file)
+
 
 def save_file(last_player_name):
     # Save the dict with the moves
@@ -122,7 +128,7 @@ def save_file(last_player_name):
 # Helper Classes
 class Marker(MDGridLayout):
     def __init__(self, move, window, *args, **kwargs):
-        super().__init__(cols=1, size_hint=[.1, 1], pos_hint={'center': [.5, .5]}, md_bg_color=[.9,.9,.9,1], *args,
+        super().__init__(cols=1, size_hint=[.1, 1], pos_hint={'center': [.5, .5]}, md_bg_color=[.9, .9, .9, 1], *args,
                          **kwargs)
         self.window = window
         self.move = move
@@ -220,22 +226,29 @@ class BarForGraphic(MDRelativeLayout):
 
 class FullBar(MDBoxLayout):
     def __init__(self, elements, name, *args, **kwargs):
-        moves_to_show=3
+        moves_to_show = 3
         w = max(Window.size)
         width = w * .23
-        super().__init__(orientation='vertical', md_bg_color=[.98, .98, .98, 1], size_hint_x=None, width=width, *args, **kwargs)
+        super().__init__(orientation='vertical', md_bg_color=[.98, .98, .98, 1], size_hint_x=None, width=width, *args,
+                         **kwargs)
+        # return funcionou
         self.elements = elements
-        self.add_widget(MDLabel(text=name, size_hint=[1,.1], halign='center'))
+        self.add_widget(MDLabel(text=name, size_hint=[1, .1], halign='center'))
         colors = ['red', [0.5, .5, 1, 1], [0, 1, 0, 1], [1, 1, 0, 1], [0, 0, 0, 1], [.5, .7, .5, 1]]
 
         moves = elements.most_common(moves_to_show)[::-1]
-        if elements.total() > sum(x[-1] for x in moves):
-            moves.insert(0, ['outros', elements.total() - sum(x[-1] for x in moves)])
-
-        moves_grid=MDGridLayout(cols=1, size_hint=[1, .9], padding=[10,10,10,0])
-        for color, [move, qnt] in zip(colors, moves):
+        total = sum([x for x in elements.values()])
+        if total > sum(x[-1] for x in moves):
+            moves.insert(0, ['outros', total - sum(x[-1] for x in moves)])
+        # return not working
+        moves_grid = MDGridLayout(cols=1, size_hint=[1, .9], padding=[10, 10, 10, 0])
+        # moves_grid = MDGridLayout(cols=1)
+        # return não funcionou
+        for color, move_qnt in zip(colors, moves):
+            move, qnt = move_qnt
             bar = MDGridLayout(size_hint=[1, qnt], md_bg_color=color, cols=1)
-            bar.add_widget(MDLabel(text=move, size_hint=[1,1], pos_hint={'center':[.5,.5]}))
+            bar.add_widget(MDLabel(text=move, size_hint=[1, 1], pos_hint={'center': [.5, .5]}))
+            # moves_grid.add_widget(MDLabel(text=move, size_hint=[1, 1], pos_hint={'center': [.5, .5]}))
             moves_grid.add_widget(bar)
         self.add_widget(moves_grid)
 
@@ -255,7 +268,8 @@ class MainWindow(MDGridLayout):
                 text = json.load(file)
                 add_set(text)
         self.player_name = MDTextField(size_hint=[1, .1], text=text, halign='center',
-                                       text_color_focus='blue', text_color_normal='black', required=True)#, on_text_validate=self.on_validate)
+                                       text_color_focus='blue', text_color_normal='black',
+                                       required=True)  # , on_text_validate=self.on_validate)
         self.player_name.bind(text=self.on_typing)
         self.player_name.bind(focus=self.on_validate)
         self.score = [0, 0]
@@ -289,7 +303,7 @@ class MainWindow(MDGridLayout):
 
         # Add the moves Markers
         markers_grid = MDGridLayout(rows=2, size_hint=[.9, .8], pos_hint={'center': [.5, .5]},
-                                    md_bg_color=[.5,.5,.5,1], spacing=10, padding=[10] * 4)
+                                    md_bg_color=[.5, .5, .5, 1], spacing=10, padding=[10] * 4)
 
         for move in MOVES:
             markers_grid.add_widget(Marker(move, self))
@@ -355,14 +369,11 @@ class StatsWindow(MDGridLayout):
         self.add_widget(self.build_moves())
 
         # statistics grid
-        common_grid_stts = MDStackLayout(orientation='lr-tb', spacing=20, padding=[20] * 4, md_bg_color=[.5,.5,.5,1],
-                                             adaptive_height=True)
+        common_grid_stts = MDStackLayout(orientation='lr-tb', spacing=20, padding=[20] * 4, md_bg_color=[.5, .5, .5, 1],
+                                         adaptive_height=True)
         stt_scroll = MDScrollView(size_hint=[1, .3], bar_color='red')
         stt_scroll.add_widget(common_grid_stts)
         self.add_widget(stt_scroll)
-
-
-
 
         # statistic btns
         common_grid_stts.add_widget(MDFillRoundFlatButton(text='Last moves', on_release=self.show_last_move_pts))
@@ -378,12 +389,13 @@ class StatsWindow(MDGridLayout):
         moves_scroll.add_widget(statistics_grid_btns)
 
         for move in MOVES:
-            statistics_grid_btns.add_widget(MDFillRoundFlatButton(text=f'{move}s', on_release=partial(self.especific_move_proeficience_per_day, move)))
+            statistics_grid_btns.add_widget(MDFillRoundFlatButton(text=f'{move}s', on_release=partial(
+                self.especific_move_proeficience_per_day, move)))
         self.add_widget(moves_scroll)
 
     def build_moves(self):
         scroll = MDScrollView(size_hint=[.9, .5])
-        grid = MDGridLayout(adaptive_height=True, spacing=20, cols=1, md_bg_color=[.5,.5,.5,1],
+        grid = MDGridLayout(adaptive_height=True, spacing=20, cols=1, md_bg_color=[.5, .5, .5, 1],
                             padding=[20, 20, 20, 20])
 
         this_player_dict = self.get_player_dict()
@@ -543,7 +555,6 @@ class StatsWindow(MDGridLayout):
         else:
             main_grid.add_widget(MDLabel(text='No statistics.'))
 
-
         popup = Popup(title=f'Pontuação', content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
         popup.open()
@@ -579,7 +590,8 @@ class StatsWindow(MDGridLayout):
         new_dict = dict()
         main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
         if player_dict in [None, {}]:
-            main_grid.add_widget(MDLabel(text='Sem informação para análises',theme_text_color='Custom', text_color='black'))
+            main_grid.add_widget(
+                MDLabel(text='Sem informação para análises', theme_text_color='Custom', text_color='black'))
         else:
             for moves_set in player_dict:
                 if moves_set['date'] not in new_dict:
@@ -600,10 +612,11 @@ class StatsWindow(MDGridLayout):
                     dates_grid.add_widget(FullBar(moves_counter, name))
 
             if len(dates_grid.children) == 0:
-                dates_grid.size_hint=[1,1]
-                dates_grid.md_bg_color = [.98,.98,.98,1]
-                dates_grid.add_widget(MDLabel(text='Sem informação para análises', size_hint=[1,1], halign='center',
-                                              theme_text_color='Custom', text_color='black', pos_hint={'center':[.5,.5]}))
+                dates_grid.size_hint = [1, 1]
+                dates_grid.md_bg_color = [.98, .98, .98, 1]
+                dates_grid.add_widget(MDLabel(text='Sem informação para análises', size_hint=[1, 1], halign='center',
+                                              theme_text_color='Custom', text_color='black',
+                                              pos_hint={'center': [.5, .5]}))
 
             scroll.add_widget(dates_grid)
             main_grid.add_widget(scroll)
@@ -616,13 +629,14 @@ class StatsWindow(MDGridLayout):
         player_dict = counter.get(self.player_name_btn.text)
         new_dict = dict()
         main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
+        monthly = True
         if player_dict in [None, {}]:
             main_grid.add_widget(MDLabel(text='Sem informação para análises'))
         else:
-            if datetime.date.fromisoformat(player_dict[0]['date'])+datetime.timedelta(days=31) > datetime.date.fromisoformat(player_dict[-1]['date']):
+            if datetime.date.fromisoformat(player_dict[0]['date']) + datetime.timedelta(
+                    days=31) > datetime.date.fromisoformat(player_dict[-1]['date']):
                 monthly = False
-            else:
-                monthly = True
+
             for moves_set in player_dict:
                 this_date = moves_set['date']
                 if monthly:
@@ -643,7 +657,8 @@ class StatsWindow(MDGridLayout):
             if monthly:
                 date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m'), reverse=False)
             else:
-                date_moves.sort(key=lambda x: datetime.datetime.fromisoformat(x[0]), reverse=False)
+                date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m-%d'), reverse=False)
+
             for date, moves_counter in date_moves:
                 if sum(moves_counter.values()) > 0:
                     if monthly:
@@ -664,7 +679,7 @@ class StatsWindow(MDGridLayout):
 
         title = f'{move_name}s by day'
         if monthly:
-            title = f'{move_name}s by Month'
+            title = f'{move_name}s by day'
         popup = Popup(title=title, content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
         popup.open()
@@ -693,6 +708,7 @@ class AssistenteApp(MDApp):
     def build_stats_window(self, *args):
         self.stats_window.change_player(self.main_window.player_name.text)
         self.stats_window.popup.build()
+
 
 class EntreEmContato(MDApp):
     def build(self):
