@@ -1,7 +1,7 @@
 """
 This will help to keep track of the strong and weak moves for players
 """
-__version__ = "0.4.7"
+__version__ = "0.4.8"
 
 import os
 import random
@@ -605,7 +605,7 @@ class StatsWindow(MDGridLayout):
             scroll = MDScrollView(size_hint=[1, 1])
             dates_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
             date_moves = list(new_dict.items())
-            date_moves.sort(key=lambda x: datetime.date.fromisoformat(x[0]), reverse=False)
+            date_moves.sort(key=lambda x: datetime.date.fromisoformat(x[0]), reverse=True)
             for date, moves_counter in date_moves:
                 if sum(moves_counter.values()) > 0:
                     name = datetime.date.fromisoformat(date).strftime('%d/%m/%y')
@@ -655,9 +655,9 @@ class StatsWindow(MDGridLayout):
             dates_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
             date_moves = list(new_dict.items())
             if monthly:
-                date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m'), reverse=False)
+                date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m'), reverse=True)
             else:
-                date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m-%d'), reverse=False)
+                date_moves.sort(key=lambda x: datetime.datetime.strptime(x[0], '%Y-%m-%d'), reverse=True)
 
             for date, moves_counter in date_moves:
                 if sum(moves_counter.values()) > 0:
