@@ -1,7 +1,7 @@
 """
 This will help to keep track of the strong and weak moves for players
 """
-__version__ = "0.4.9"
+__version__ = "0.4.10"
 
 import os
 import random
@@ -59,12 +59,12 @@ PRAZO_MAXIMO = datetime.date(2023, 3, 10)
 MOVES = [
     'Service',
     'Clear',
-    'Drive',
+    'Drop',
     'Smash',
     'Defense',
-    'Drop',
-    'Net Play',
+    'Drive',
     'kill',
+    'Net Play',
 ]
 
 
@@ -288,7 +288,7 @@ class MainWindow(MDGridLayout):
             with open(last_player, 'r') as file:
                 text = json.load(file)
                 add_set(text)
-        self.player_name = MDTextField(size_hint=[1, .1], text=text, halign='center',
+        self.player_name = MDTextField(size_hint=[1, .2], text=text, halign='center',
                                        text_color_focus='blue', text_color_normal='black',
                                        required=True)
         self.player_name.bind(text=self.on_typing)
@@ -304,7 +304,7 @@ class MainWindow(MDGridLayout):
         # add a Title (Player name)
         self.add_widget(self.player_name)
 
-        points_grid = MDGridLayout(rows=1, size_hint=[1, .1])
+        points_grid = MDGridLayout(rows=1, size_hint=[1, .2])
 
         points_grid.add_widget(MDRectangleFlatIconButton(text='back pt', on_release=self.back_point, size_hint=[.3, 1]))
         points_grid.add_widget(self.score_lbl)
@@ -321,7 +321,7 @@ class MainWindow(MDGridLayout):
         self.add_widget(pts_grid)
 
         # Add the moves Markers
-        markers_grid = MDGridLayout(rows=2, size_hint=[.9, .8], pos_hint={'center': [.5, .5]},
+        markers_grid = MDGridLayout(rows=2, size_hint=[.9, .5], pos_hint={'center': [.5, .3]},
                                     md_bg_color=[.5, .5, .5, 1], spacing=10, padding=[10] * 4)
 
         for move in MOVES:
@@ -363,7 +363,6 @@ class MainWindow(MDGridLayout):
             if last_pt:
                 moves = (last_pt[-1]['moves'])
                 self.history_lbl.text = ', '.join([x[0] for x in moves])
-
 
     def back_point(self, *args):
         unset_point(self.player_name.text)
@@ -800,7 +799,7 @@ class StatsWindow(MDGridLayout):
         if this_player_games_list is None:
             main_grid.add_widget(MDLabel(text='Sem informação para análises'))
         else:
-            new_dict = defaultdict(lambda :Counter())
+            new_dict = defaultdict(lambda :[Counter(), True])
 
             # create the dict with info
             for game in this_player_games_list:
@@ -808,12 +807,16 @@ class StatsWindow(MDGridLayout):
                 if total_pts >= 2:
                     for idx, pt in enumerate(game['set']):
                         for move, grade in pt['moves']:
-                            new_dict[idx].update([move])
+                            new_dict[idx][0].update([move])
+                            win_state = 'Won'
+                            if not pt['won']:
+                                win_state = 'Lost'
+                            new_dict[idx][1] = win_state
 
 
 
-            for idx, counter_obj in new_dict.items():
-                moves_grid.add_widget(FullBar(counter_obj, idx+1))
+            for idx, [counter_obj, won] in new_dict.items():
+                moves_grid.add_widget(FullBar(counter_obj, f'{idx+1} ({won})'))
 
         popup = Popup(title='Moves in each point - Ever', content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
