@@ -1,7 +1,7 @@
 """
 This will help to keep track of the strong and weak moves for players
 """
-__version__ = "0.4.8"
+__version__ = "0.4.9"
 
 import os
 import random
@@ -9,7 +9,7 @@ from functools import partial
 import json
 import datetime
 import statistics as stt
-from collections import Counter
+from collections import Counter, defaultdict
 
 # os.environ['KIVY_ORIENTATION'] = 'Portrait'
 
@@ -57,10 +57,10 @@ slider_threshold = 20
 PRAZO_MAXIMO = datetime.date(2023, 3, 10)
 
 MOVES = [
+    'Service',
     'Clear',
     'Drive',
     'Smash',
-    'Serve',
     'Defense',
     'Drop',
     'Net Play',
@@ -96,13 +96,18 @@ def add_point(player_name, *args):
 
 
 def set_point_won(player_name, won=True, *args):
+    if player_name not in counter:
+        add_player(player_name)
     counter[player_name][-1]['set'][-1]['won'] = won
     add_point(player_name)
 
 
-def unset_point(player_input, *args):
-    player_name = player_input.text.title().strip()
-    counter[player_name][-1]['set'].pop()
+def unset_point(player_name, *args):
+    add_player(player_name)
+
+    if len(counter[player_name][-1]['set']) >1:
+        counter[player_name][-1]['set'].pop()
+
     if len(counter[player_name][-1]['set']) > 0:
         counter[player_name][-1]['set'][-1]['won'] = None
 
@@ -169,7 +174,7 @@ class Marker(MDGridLayout):
         add_move(move=self.move, player_name=self.window.player_name.text.title().strip(), state=state)
 
         # add the history
-        self.window.add_history(self.move, state)
+        self.window.update_history()
 
 
 class Moveline(MDGridLayout):
@@ -179,6 +184,23 @@ class Moveline(MDGridLayout):
             MDLabel(text=f'{move} ==>', adaptive_width=True, shorten=True, size_hint=[.5, 1], halign='center'))
         self.add_widget(MDLabel(text=f'Bons: {good}', adaptive_width=True, shorten=True, size_hint=[.25, 1]))
         self.add_widget(MDLabel(text=f'Ruins: {bad}', adaptive_width=True, shorten=True, size_hint=[.25, 1]))
+
+class PlayerLine(MDGridLayout):
+    def __init__(self, selector, name, *args, **kwargs):
+        super().__init__(rows=1, adaptive_height=True, *args, **kwargs)
+        self.name = name
+        self.selector = selector
+        self.add_widget(MDFillRoundFlatButton(text=name, size_hint=[.9, 1], pos_hint={'center':[.5,.5]}, on_release=self.select_player))
+        self.add_widget(MDIconButton(icon='delete-circle', size_hint=[.1, 1], pos_hint={'center':[.5,.5]}, on_release=self.delete_player, theme_icon_color='Custom', icon_color='red'))
+
+    def select_player(self, *args):
+        self.selector.click_up(self.name)
+
+    def delete_player(self, *args):
+        self.parent.remove_widget(self)
+        counter.pop(self.name)
+        save_file('Player')
+
 
 
 class PlayersSelection(ModalView):
@@ -197,8 +219,7 @@ class PlayersSelection(ModalView):
                             spacing=20, padding=[30, 10, 30, 10])
         scroll.add_widget(grid)
         for player in counter:
-            grid.add_widget(MDFillRoundFlatButton(text=player, pos_hint={'center': [.5, .5]},
-                                                  on_release=partial(self.click_up, player)))
+            grid.add_widget(PlayerLine(self, player))
 
         layout.add_widget(scroll)
         self.add_widget(layout)
@@ -225,7 +246,7 @@ class BarForGraphic(MDRelativeLayout):
 
 
 class FullBar(MDBoxLayout):
-    def __init__(self, elements, name, *args, **kwargs):
+    def __init__(self, elements:Counter, name, *args, **kwargs):
         moves_to_show = 3
         w = max(Window.size)
         width = w * .23
@@ -233,7 +254,7 @@ class FullBar(MDBoxLayout):
                          **kwargs)
         # return funcionou
         self.elements = elements
-        self.add_widget(MDLabel(text=name, size_hint=[1, .1], halign='center'))
+        self.add_widget(MDLabel(text=str(name), size_hint=[1, .1], halign='center'))
         colors = ['red', [0.5, .5, 1, 1], [0, 1, 0, 1], [1, 1, 0, 1], [0, 0, 0, 1], [.5, .7, .5, 1]]
 
         moves = elements.most_common(moves_to_show)[::-1]
@@ -269,16 +290,14 @@ class MainWindow(MDGridLayout):
                 add_set(text)
         self.player_name = MDTextField(size_hint=[1, .1], text=text, halign='center',
                                        text_color_focus='blue', text_color_normal='black',
-                                       required=True)  # , on_text_validate=self.on_validate)
+                                       required=True)
         self.player_name.bind(text=self.on_typing)
         self.player_name.bind(focus=self.on_validate)
-        self.score = [0, 0]
         self.score_lbl = MDLabel(size_hint=[.4, 1], pos_hint={'center': [.5, .5]}, text=' 0 x 0 ', halign='center',
                                  font_style='H6')
         self.history_lbl = MDLabel(size_hint=[.4, .05], pos_hint={'center': [.5, .5]}, text='  ', halign='center',
                                    font_style='H6')
         self.history = list()
-        self.all_pts = list()
         self.build()
 
     def build(self):
@@ -316,36 +335,45 @@ class MainWindow(MDGridLayout):
         self.player_name.text = self.player_name.text.title().strip()
 
     def set_point(self, player=True, *args):
-        self.add_point(player)
         set_point_won(self.player_name.text.title().strip(), player)
         self.update_score()
-        self.history_lbl.text = ''
-        self.history.clear()
+        self.update_history()
 
     def update_score(self):
-        player_score = self.all_pts.count(1)
-        adversary_score = self.all_pts.count(0)
-        self.score_lbl.text = f' {player_score} x {adversary_score} '
+        this_player_games_list = counter.get(self.player_name.text)
+        if this_player_games_list in [None, []]:
+            self.score_lbl.text = '0 x 0'
+        else:
+            this_game = this_player_games_list[-1]['set']
+            player_score = 0
+            adversary_score = 0
+            for pt in this_game:
+                won = pt['won']
+                if won is True:
+                    player_score += 1
+                elif won is False:
+                    adversary_score += 1
+            self.score_lbl.text = f' {player_score} x {adversary_score} '
 
-    def add_history(self, move, state):
-        self.history.append(move)
-        text = ', '.join(self.history)
-        self.history_lbl.text = text
+    def update_history(self):
+        this_player_games_list = counter.get(self.player_name.text)
+        if this_player_games_list:
+            last_game_set = this_player_games_list[-1]
+            last_pt = last_game_set.get('set')
+            if last_pt:
+                moves = (last_pt[-1]['moves'])
+                self.history_lbl.text = ', '.join([x[0] for x in moves])
+
 
     def back_point(self, *args):
-        if len(self.all_pts) > 0:
-            self.all_pts.pop()
-            unset_point(self.player_name)
-            self.update_score()
-
-    def add_point(self, player=True):
-        self.all_pts.append(int(player))
+        unset_point(self.player_name.text)
+        self.update_score()
+        self.update_history()
 
     def new_set(self, *args):
-        self.all_pts.clear()
-        self.history.clear()
-        self.history_lbl.text = ''
+        add_set(self.player_name.text)
         self.update_score()
+        self.update_history()
 
 
 class StatsWindow(MDGridLayout):
@@ -359,8 +387,6 @@ class StatsWindow(MDGridLayout):
         self.player_name_btn = MDRoundFlatButton(font_style='H5', size_hint=[.5, .1], text=text, halign='center',
                                                  valign='center', text_color='black', on_release=self.popup.open)
         self.build()
-
-        # self.popup.open()
 
     def build(self):
         self.clear_widgets()
@@ -380,6 +406,9 @@ class StatsWindow(MDGridLayout):
         common_grid_stts.add_widget(MDFillRoundFlatButton(text='Qnt moves to pt', on_release=self.moves_qnt_per_point))
         common_grid_stts.add_widget(MDFillRoundFlatButton(text='Common Moves', on_release=self.moves_used_per_point))
         common_grid_stts.add_widget(MDFillRoundFlatButton(text='Moves by day', on_release=self.moves_per_day))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Moves by game', on_release=self.moves_by_the_game))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Moves distribuition last game', on_release=self.moves_by_last_game))
+        common_grid_stts.add_widget(MDFillRoundFlatButton(text='Moves distribuition by index', on_release=self.moves_by_the_pt_idx))
 
         # specific for moves
         statistics_grid_btns = MDStackLayout(orientation='lr-tb', spacing=20, padding=[20] * 4,
@@ -682,6 +711,114 @@ class StatsWindow(MDGridLayout):
             title = f'{move_name}s by day'
         popup = Popup(title=title, content=main_grid, size_hint=[1, .8], title_align='center',
                       title_size=MDLabel(font_style="H4").font_size)
+        popup.open()
+
+    def moves_by_the_game(self, *args):
+        # create the window
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
+
+        scroll = MDScrollView(size_hint=[1, 1])
+        moves_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
+        scroll.add_widget(moves_grid)
+        main_grid.add_widget(scroll)
+
+
+        this_player_games_list = counter.get(self.player_name_btn.text)
+        new_dict = {0:Counter(), 1:Counter(), 2:Counter()}
+
+        if this_player_games_list in [None, {}]:
+            main_grid.add_widget(MDLabel(text='Sem informação para análises'))
+        else:
+
+            # create the dict with info
+            for game in this_player_games_list:
+                total_pts = len(game['set'])
+                if total_pts >= 2:
+                    for idx, pt in enumerate(game['set']):
+                        for move, grade in pt['moves']:
+                            new_dict[int(idx/total_pts*3)].update([move])
+
+
+
+            for moment, [idx, counter_obj] in (zip(['Begin', 'Middle', 'End'], new_dict.items())):
+                moves_grid.add_widget(FullBar(counter_obj, moment))
+
+        popup = Popup(title='Moves in the game', content=main_grid, size_hint=[1, .8], title_align='center',
+                      title_size=MDLabel(font_style="H4").font_size)
+
+        # open the popup
+        popup.open()
+
+    def moves_by_last_game(self, *args):
+        # create the window
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
+        scroll = MDScrollView(size_hint=[1, 1])
+        moves_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
+        scroll.add_widget(moves_grid)
+        main_grid.add_widget(scroll)
+
+
+        this_player_games_list = counter.get(self.player_name_btn.text)
+        new_dict = {0:Counter(), 1:Counter(), 2:Counter()}
+
+
+        if this_player_games_list is None:
+            main_grid.add_widget(MDLabel(text='Sem informação para análises'))
+        else:
+
+            # create the dict with info
+            for game in this_player_games_list[::-1]:
+                total_pts = len(game['set'])
+                if total_pts >= 2:
+                    for idx, pt in enumerate(game['set']):
+                        for move, grade in pt['moves']:
+                            new_dict[int(idx/total_pts*3)].update([move])
+                    break
+
+
+            for moment, [idx, counter_obj] in (zip(['Begin', 'Middle', 'End'], new_dict.items())):
+                moves_grid.add_widget(FullBar(counter_obj, moment))
+
+        popup = Popup(title='Moves in last game', content=main_grid, size_hint=[1, .8], title_align='center',
+                      title_size=MDLabel(font_style="H4").font_size)
+
+        # open the popup
+        popup.open()
+
+    def moves_by_the_pt_idx(self, *args):
+        # create the window
+        main_grid = MDGridLayout(cols=1, padding=[20, 0, 20, 20], spacing=10)
+
+        scroll = MDScrollView(size_hint=[1, 1])
+        moves_grid = MDGridLayout(rows=1, adaptive_width=True, padding=10, spacing=10)
+        scroll.add_widget(moves_grid)
+        main_grid.add_widget(scroll)
+
+        # create the infos
+
+        this_player_games_list = counter.get(self.player_name_btn.text)
+        if this_player_games_list is None:
+            main_grid.add_widget(MDLabel(text='Sem informação para análises'))
+        else:
+            new_dict = defaultdict(lambda :Counter())
+
+            # create the dict with info
+            for game in this_player_games_list:
+                total_pts = len(game['set'])
+                if total_pts >= 2:
+                    for idx, pt in enumerate(game['set']):
+                        for move, grade in pt['moves']:
+                            new_dict[idx].update([move])
+
+
+
+            for idx, counter_obj in new_dict.items():
+                moves_grid.add_widget(FullBar(counter_obj, idx+1))
+
+        popup = Popup(title='Moves in each point - Ever', content=main_grid, size_hint=[1, .8], title_align='center',
+                      title_size=MDLabel(font_style="H4").font_size)
+
+        # open the popup
         popup.open()
 
 
